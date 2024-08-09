@@ -1,0 +1,651 @@
+#!/usr/bin/env node
+/**
+
+Copyright 2024 Gavin Brown.
+
+Redistribution and use in source and binary forms, with or without modification,
+are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+
+3. Neither the name of the copyright holder nor the names of its contributors
+   may be used to endorse or promote products derived from this software without
+   specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS “AS IS” AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
+ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+**/
+
+const VERSION       = "0.1";
+const USER_AGENT    = "jrdap/" + VERSION;
+const INDENT_STRING = "  ";
+const BOLD          = "\x1b[1m";
+const RESET         = "\x1b[0m";
+
+//
+// These are used to auto-detect the object type from the provided input.
+//
+const patterns = [
+    [ /^https?:\/\//i,                              "url"           ],
+    [ /(::|^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$)/,  "ip network"    ],
+    [ /^(ASN?\d+|\d+)$/i,                           "autnum"        ],
+    [ /^[a-z][a-z0-9-]*[a-z]$/i,                    "tld"           ],
+    [ /^[a-z0-9\.\-]+$/,                            "domain"        ],
+];
+
+//
+// These map objects to URLs. For the moment the RDAP.org bootstrap server is
+// used, but eventually these will consume the bootstrap files natively.
+//
+const resolvers = {
+    domain:         o => "https://rdap.org/domain/"         + o,
+    "ip network":   o => "https://rdap.org/ip/"             + o,
+    autnum:         o => "https://rdap.org/autnum/"         + o.replaceAll(/^ASN?/ig, ""),
+    entity:         o => "https://rdap.org/entity/"         + o,
+    tld:            o => "https://rdap.iana.org/domain/"    + o,
+    url:            o => o,
+};
+
+//
+// These object properties are always displayed at the top.
+//
+const commonInitialProperties   = ["objectClassName", "lang", "handle"];
+
+//
+// these object properties are always displayed at the bottom
+//
+const commonFinalProperties     = ["status", "events", "entities", "links", "remarks", "notices", "rdapConformance"];
+
+//
+// Object-specific properties.
+//
+const objectSpecificProperties = {
+    domain:         [ "ldhName", "unicodeName", "nameservers", "secureDNS" ],
+    "ip network":   [ "parentHandle", "ipVersion", "startAddress", "endAddress", "cidr0_cidrs" ],
+    autnum:         [ "type", "startAutnum", "endAutnum", "country" ],
+    entity:         [ "roles", "vcardArray" ],
+    nameserver:     [ "ldhName", "unicodeName", "ipAddresses" ],
+    generic:        [ ],
+};
+
+//
+// This array determines the display order for events.
+//
+const eventOrder = [
+    "registration",
+    "reregistration",
+    "last changed",
+    "expiration",
+    "deletion",
+    "reinstantiation",
+    "transfer",
+    "locked",
+    "unlocked",
+    "last update of RDAP database",
+    "registrar expiration",
+    "enum validation expiration",
+];
+
+//
+// These functions display specific object properties.
+//
+const propertyDisplayers = {
+    cidr0_cidrs:        displayCidr0_cidrs,
+    country:            displayCountry,
+    endAddress:         displayEndAddress,
+    endAutnum:          displayEndAutnum,
+    entities:           displayEntities,
+    events:             displayEvents,
+    handle:             displayHandle,
+    ipAddresses:        displayIPAddresses,
+    ipVersion:          displayIpVersion,
+    lang:               displayLang,
+    ldhName:            displayLDHName,
+    links:              displayLinks,
+    nameservers:        displayNameservers,
+    notices:            displayNotices,
+    objectClassName:    displayObjectClassName,
+    parentHandle:       displayParentHandle,
+    publicIds:          displayPublicIds,
+    rdapConformance:    displayRDAPConformance,
+    remarks:            displayRemarks,
+    roles:              displayRoles,
+    secureDNS:          displaySecureDNS,
+    startAddress:       displayStartAddress,
+    startAutnum:        displayStartAutnum,
+    status:             displayStatus,
+    type:               displayType,
+    unicodeName:        displayUnicodeName,
+    vcardArray:         displayJCard,
+};
+
+//
+// If a jCard ADR property has a structured address, then this array is used
+// to display each field. The order of fields is significant.
+//
+const structuredAddressFields = [
+    "PO Box",
+    "Apartment/Suite",
+    "Street Address",
+    "Locality",
+    "Region",
+    "Postal Code",
+    "Country",
+];
+
+//
+// Command-line arguments are put in here.
+//
+const opt = {
+    named:      {},
+    positional: [],
+};
+
+//
+// Process command-line arguments.
+//
+for (var i = 2 ; i < process.argv.length ; i++) {
+    const arg = process.argv[i];
+
+    if ("--" == arg.substr(0, 2)) {
+        if (arg.indexOf("=") >= 0) {
+            opt.named[arg.substr(2, arg.indexOf("=")-2)] = arg.substr(1+arg.indexOf("="));
+
+        } else {
+            opt.named[arg.substr(2)] = true;
+
+        }
+
+    } else {
+        opt.positional.push(arg);
+
+    }
+}
+
+if (opt.named.hasOwnProperty("help")) {
+    help();
+
+} else if (opt.positional.length != 1) {
+    help("Incorrect number of positional parameters", 1);
+
+}
+
+const object = opt.positional[0];
+
+let type;
+if (opt.named.hasOwnProperty("type")) {
+    type = opt.named.type;
+
+} else {
+    for (var i = 0 ; i < patterns.length ; i++) {
+        if (patterns[i][0].test(object)) {
+            type = patterns[i][1];
+            break;
+        }
+    }
+}
+
+type = type.replaceAll("-", " ");
+
+if (!resolvers.hasOwnProperty(type)) {
+    help("Unknown object type '" + type + "'", 1);
+}
+
+const url = resolvers[type](object);
+
+const options = {
+    headers: {
+        "accept":       "application/json",
+        "user-agent":   USER_AGENT,
+    },
+    redirect:   "follow",
+}
+
+fetch(url, options).then(
+    function(r) {
+        if (!r.ok) {
+            console.log(r);
+            fail(r.statusText + " (" + r.status + ")");
+
+        } else {
+            r.json().then(
+                j => displayObject(j, 0),
+                m => fail("Error parsing JSON: " + m),
+            );
+        }
+    },
+    m => fail(m),
+);
+
+function help(msg="", exit=0) {
+    if (msg.length > 0) say("Error: " + msg);
+    say("Usage: jrdap [OPTIONS] OBJECT");
+    say("");
+    say("jrdap is a command-line interface to the Registration Data Access Protocol (RDAP).");
+    say("");
+    say("Options:");
+    say("");
+
+    say("  --help       Display this help");
+
+    say("  --type=TYPE  (OPTIONAL) specify object type. TYPE may be one of the following:");
+    say("");
+    Object.keys(resolvers).forEach(k => say(" ".repeat(15) + "* " + k.replaceAll(" ", "-")));
+    say("");
+    say(" ".repeat(15) + "If not specified, the type will be guessed from the provided input.");
+
+    const examples = [
+        "example.com",
+        "192.0.2.1",
+        "2001:DB8::1",
+        "AS65535",
+        "--type=tld example",
+        "https://rdap.org/domain/example",
+    ];
+
+    say("");
+    say("Example usage:");
+    examples.forEach(function(e) {
+        say("");
+        say("  jrdap " + e);
+    });
+
+    say("");
+    process.exit(exit);
+}
+
+function fail(msg) {
+    say("Error: " + msg);
+    process.exit(1);
+}
+
+function displayObject(object, indent) {
+    const type = object.objectClassName ?? null;
+
+    let propertyList = [
+        commonInitialProperties,
+        objectSpecificProperties[type] ?? objectSpecificProperties.generic,
+        commonFinalProperties,
+    ].flat(1);
+
+    displayObjectProperties(object, indent, propertyList);
+}
+
+function displayObjectProperties(object, indent, propertyList) {
+    for (var i = 0 ; i < propertyList.length ; i++) {
+        const p = propertyList[i];
+
+        if (object.hasOwnProperty(p)) {
+            if (propertyDisplayers.hasOwnProperty(p)) {
+                propertyDisplayers[p](object[p], indent);
+
+            } else {
+                if ("String" == object[p].constructor.name) {
+                    printKV(p, object[p], indent);
+
+                } else {
+                    printKV(p, JSON.stringify(object[p]), indent);
+
+                }
+            }
+        }
+    }
+}
+
+function displayRDAPConformance(v, indent) {
+    if ("Array" == v.constructor.name) {
+        printKV("RDAP Conformance", "", indent);
+        v.sort().forEach(t => printIndented("* " + t, indent+1));
+    }
+}
+
+function displayObjectClassName(v, indent) {
+    if (indent < 1) {
+        printKV("Type", v, indent);
+    }
+}
+
+function displayHandle(v, indent) {
+    printKV("Handle", v, indent);
+}
+
+function displayLDHName(v, indent) {
+    printKV("Name (ASCII)", v, indent);
+}
+
+function displayUnicodeName(v, indent) {
+    printKV("Name (UTF-8)", v, indent);
+}
+
+function displayName(v, indent) {
+    printKV("Name", v, indent);
+}
+
+function displayEvents(v, indent) {
+    if ("Array" == v.constructor.name && v.length > 0) {
+        printKV("Events", "", indent);
+        v.sort((a, b) => eventOrder.indexOf(a.eventAction) - eventOrder.indexOf(b.eventAction)).forEach(e => displayEvent(e, indent));
+    }
+}
+
+function displayEvent(event, indent) {
+    if (event.hasOwnProperty("eventActor")) {
+        printKV(event.eventAction, event.eventDate + "(by " + event.eventActor + ")", indent+1);
+
+    } else {
+        printKV(event.eventAction, event.eventDate, indent+1);
+
+    }
+
+    if (event.hasOwnProperty("links")) {
+        displayLinks(event.links, indent+1);
+    }
+}
+
+function displayStatus(v, indent) {
+    if ("Array" == v.constructor.name && v.length > 0) {
+        v.sort().forEach(s => printKV("Status", s, indent));
+    }
+}
+
+function displayEntities(v, indent) {
+    if ("Array" == v.constructor.name && v.length > 0) {
+        v.forEach(function(e) {
+            if (e.hasOwnProperty("roles") && "Array" == e.roles.constructor.name && e.roles.length > 0) {
+                printKV(e.roles.map(r => ucFirst(r)).join(", ") + " Contact", "", indent);
+                displayObject(e, indent+1);
+            }
+        });
+    }
+}
+
+function displayLinks(v, indent) {
+    if ("Array" == v.constructor.name && v.length > 0) {
+        printKV("Links", "", indent);
+        v.forEach(l => displayLink(l, indent+1));
+    }
+}
+
+function displayLink(link, indent) {
+    printKV(link.title ?? link.rel ?? "URL", link.href, indent);
+}
+
+function displayNotices(v, indent) {
+    if ("Array" == v.constructor.name && v.length > 0) {
+        printKV("Notices", "", indent);
+        v.forEach(n => displayNoticeOrRemark(n, indent+1, false));
+    }
+}
+
+function displayRemarks(v, indent) {
+    if ("Array" == v.constructor.name && v.length > 0) {
+        printKV("Remarks", "", indent);
+        v.forEach(r => displayNoticeOrRemark(r, indent+1, true));
+    }
+}
+
+function displayNoticeOrRemark(r, indent, isRemark) {
+    printKV(r.title ?? (isRemark ? "Remark" : "Notice"), "", indent);
+
+    const lineSplit = /[\r\n]+/;
+    const wordSplit = /[ \t]+/;
+
+    const linePrefix = INDENT_STRING.repeat(indent+1);
+
+    for (var i = 0 ; i < r.description.length ; i++) {
+        let lines = r.description[i].split(lineSplit);
+
+        for (var j = 0 ; j < lines.length ; j++) {
+            let words = lines[j].trim().split(wordSplit);
+
+            let line = linePrefix;
+
+            while (words.length > 0) {
+                const word = words.shift();
+                if (line.length + word.length + 1 > 80) {
+                    process.stdout.write(line + "\n");
+
+                    line = linePrefix;
+                }
+
+                line = line.length == linePrefix.length ? line + word : line + " " + word;
+            }
+
+            process.stdout.write(line + "\n");
+        }
+    }
+
+    if (r.hasOwnProperty("links")) {
+        displayLinks(r.links, indent+1);
+    }
+}
+
+function displayPort43(v, indent) {
+    printKV("Whois Server", v, indent);
+}
+
+function displayNameservers(v, indent) {
+    if ("Array" == v.constructor.name && v.length > 0) {
+        printKV("Nameservers", "", indent);
+        v.sort(nameserverSortFunction).forEach(n => displayObject(n, indent+1));
+    }
+}
+
+const nameserverSortFields = ["unicodeName", "ldhName"];
+function nameserverSortFunction(a, b) {
+    for (var i = 0 ; i < nameserverSortFields.length ; i++) {
+        const f = nameserverSortFields[i];
+
+        if (a.hasOwnProperty(f) && b.hasOwnProperty(f)) {
+            return a[f].localeCompare(b[f]);
+        }
+    }
+
+    return 0;
+}
+
+function displayJCard(v, indent) {
+    if ("Array" == v.constructor.name && "Array" == v[1].constructor.name && v[1].length > 0) {
+        v[1].forEach(p => displayJCardProperty(p, indent));
+    }
+}
+
+function displayJCardProperty(p, indent) {
+    if ("Array" == p.constructor.name && 4 == p.length) {
+        switch(p[0].toUpperCase()) {
+            case "FN":      displayFN(p, indent);       break;
+            case "ORG":     displayORG(p, indent);      break;
+            case "ADR":     displayADR(p, indent);      break;
+            case "TEL":     displayTEL(p, indent);      break;
+            case "EMAIL":   displayEMAIL(p, indent);    break;
+        }
+    }
+}
+
+function displayFN(p, indent) {
+    printKV("Name", p[3], indent);
+}
+
+function displayORG(p, indent) {
+    printKV("Organization", p[3], indent);
+}
+
+function displayADR(p, indent) {
+    if ("Array" == p[3].constructor.name && p[3].filter(i => i.length > 0).length > 0) {
+        printKV("Address", "", indent);
+
+        for (var i = 0 ; i < structuredAddressFields.length ; i++) {
+            if (p[3][i].length > 0) {
+                printKV(structuredAddressFields[i], p[3][i], indent+1);
+            }
+        }
+
+    } else if (p[1].hasOwnProperty("label")) {
+        printKV("Address", "", indent);
+        p[1].label.split("\n").map(l => printIndented(l, indent+1));
+
+    }
+}
+
+function displayTEL(p, indent) {
+    let type;
+
+    if (p[1].hasOwnProperty("type") && ("fax" == p[1].type || ("Array" == p[1].type.constructor.name && p[1].type.includes("fax")))) {
+        type = "Fax";
+
+    } else {
+        type = "Voice";
+
+    }
+
+    printKV(type, p[3], indent);
+}
+
+function displayEMAIL(p, indent) {
+    printKV("Email", p[3], indent);
+}
+
+function displayIPAddresses(v, indent) {
+    let addrs = [];
+
+    ["v4", "v6"].forEach(function (f) {
+        if (v.hasOwnProperty(f)) {
+            v[f].forEach(a => addrs.push(a));
+        }
+    });
+
+    addrs.forEach(a => printKV("IP Address", a, indent));
+}
+
+function displaySecureDNS(v, indent) {
+    if (v.hasOwnProperty("zoneSigned")) {
+        printKV("Zone Signed", JSON.stringify(v.zoneSigned), indent);
+    }
+
+    if (v.hasOwnProperty("delegationSigned")) {
+        printKV("Delegation Signed", JSON.stringify(v.delegationSigned), indent);
+    }
+
+    if (v.hasOwnProperty("dsData") && "Array" == v.dsData.constructor.name) {
+        v.dsData.forEach(function(ds) {
+            const values = [ds.keyTag, ds.algorithm, ds.digestType, ds.digest];
+            printKV("DS", values.join(" "), indent);
+        });
+    }
+}
+
+function displayRoles(v, indent) {
+    if (indent < 1) {
+        if ("Array" == v.constructor.name) {
+            printKV("Role(s)", v.join(", "), indent);
+        }
+    }
+}
+
+function displayPublicIds(v, indent) {
+    if ("Array" == v.constructor.name) {
+        v.forEach(id => displayPublicId(id, indent+1));
+    }
+}
+
+function displayPublicId(v, indent) {
+    printKV(v.type, v.identifier, indent);
+}
+
+function displayLang(v, indent) {
+    printKV("Language", v, indent);
+}
+
+function displayParentHandle(v, indent) {
+    printKV("Parent Handle", v, indent);
+}
+
+function displayIpVersion(v, indent) {
+    printKV("Version", v, indent);
+}
+
+function displayStartAddress(v, indent) {
+    printKV("Start Address", v, indent);
+}
+
+function displayEndAddress(v, indent) {
+    printKV("End Address", v, indent);
+}
+
+function displayCidr0_cidrs(v, indent) {
+    if ("Array" == v.constructor.name) {
+        v.forEach(function(p) {
+            let cidr;
+
+            if (p.hasOwnProperty("v6prefix")) {
+                cidr = p.v6prefix;
+
+            } else {
+                cidr = p.v4prefix;
+
+            }
+
+            cidr = cidr + "/" + p.length;
+
+            printKV("CIDR", cidr, indent);
+        });
+    }
+}
+
+function displayType(v, indent) {
+    printKV("Type", v, indent);
+}
+
+function displayStartAutnum(v, indent) {
+    printKV("Start", v, indent);
+}
+
+function displayEndAutnum(v, indent) {
+    printKV("End", v, indent);
+}
+
+function displayCountry(v, indent) {
+    printKV("Country", v, indent);
+}
+
+function printKV(name, value, indent) {
+    name = ucFirst(name ?? "").trim();
+    value = value ?? "";
+
+    let line;
+    if (process.stdout.isTTY) {
+        line = BOLD + name + ": " + RESET + value;
+
+    } else {
+        line = name + ": " + value;
+
+    }
+
+    printIndented(line, indent);
+}
+
+function printIndented(l, indent) {
+    say(INDENT_STRING.repeat(indent) + l);
+}
+
+function say(l) {
+    process.stdout.write(l + "\n");
+}
+
+function ucFirst(str) {
+    return str.charAt(0).toUpperCase() + str.slice(1);
+}
