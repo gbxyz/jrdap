@@ -47,15 +47,17 @@ const patterns = [
     [ /^[a-z0-9\.\-]+$/,                            "domain"        ],
 ];
 
+const bootstrapServerURL = "https://rdap.org";
+
 //
-// These map objects to URLs. For the moment the RDAP.org bootstrap server is
-// used, but eventually these will consume the bootstrap files natively.
+// These resolve objects to URLs. For the moment the RDAP.org bootstrap server
+// is used, but eventually these will consume the bootstrap files natively.
 //
 const resolvers = {
-    domain:         o => "https://rdap.org/domain/"         + o,
-    "ip network":   o => "https://rdap.org/ip/"             + o,
-    autnum:         o => "https://rdap.org/autnum/"         + o.replaceAll(/^ASN?/ig, ""),
-    entity:         o => "https://rdap.org/entity/"         + o,
+    domain:         o => bootstrapServerURL + "/domain/"    + o,
+    "ip network":   o => bootstrapServerURL + "/ip/"        + o,
+    autnum:         o => bootstrapServerURL + "/autnum/"    + o.replaceAll(/^ASN?/ig, ""),
+    entity:         o => bootstrapServerURL + "/entity/"    + o,
     tld:            o => "https://rdap.iana.org/domain/"    + o,
     url:            o => o,
 };
@@ -63,12 +65,12 @@ const resolvers = {
 //
 // These object properties are always displayed at the top.
 //
-const commonInitialProperties   = ["objectClassName", "lang", "handle"];
+const commonInitialProperties = ["objectClassName", "lang", "handle"];
 
 //
-// these object properties are always displayed at the bottom
+// These object properties are always displayed at the bottom.
 //
-const commonFinalProperties     = ["status", "events", "entities", "links", "remarks", "notices", "rdapConformance"];
+const commonFinalProperties = ["status", "events", "entities", "links", "remarks", "notices", "rdapConformance"];
 
 //
 // Object-specific properties.
@@ -98,6 +100,23 @@ const eventOrder = [
     "last update of RDAP database",
     "registrar expiration",
     "enum validation expiration",
+];
+
+//
+// This array determines the display order for entities.
+//
+const roleOrder = [
+    "registrant",
+    "sponsor",
+    "proxy",
+    "administrative",
+    "technical",
+    "noc",
+    "billing",
+    "reseller",
+    "registrar",
+    "notifications",
+    "abuse",
 ];
 
 //
@@ -212,13 +231,12 @@ const options = {
         "accept":       "application/json",
         "user-agent":   USER_AGENT,
     },
-    redirect:   "follow",
-}
+    redirect: "follow",
+};
 
 fetch(url, options).then(
     function(r) {
         if (!r.ok) {
-            console.log(r);
             fail(r.statusText + " (" + r.status + ")");
 
         } else {
@@ -269,7 +287,7 @@ function help(msg="", exit=0) {
 }
 
 function fail(msg) {
-    say("Error: " + msg);
+    say(BOLD + "Error: " + RESET + msg);
     process.exit(1);
 }
 
@@ -364,13 +382,31 @@ function displayStatus(v, indent) {
 
 function displayEntities(v, indent) {
     if ("Array" == v.constructor.name && v.length > 0) {
-        v.forEach(function(e) {
+        v.sort(entitySortFunction).forEach(function(e) {
             if (e.hasOwnProperty("roles") && "Array" == e.roles.constructor.name && e.roles.length > 0) {
                 printKV(e.roles.map(r => ucFirst(r)).join(", ") + " Contact", "", indent);
                 displayObject(e, indent+1);
             }
         });
     }
+}
+
+function entitySortFunction(a, b) {
+    return roleOrder.indexOf(lowestRole(a)) - roleOrder.indexOf(lowestRole(b));
+}
+
+function lowestRole(e) {
+    if (!e.hasOwnProperty("roles") || "Array" !== e.roles.constructor.name) {
+        return undefined;
+
+    } else {
+        return e.roles.sort(sortRoles).shift();
+
+    }
+}
+
+function sortRoles(a, b) {
+    return roleOrder.indexOf(a) - roleOrder.indexOf(b);
 }
 
 function displayLinks(v, indent) {
@@ -440,12 +476,15 @@ function displayPort43(v, indent) {
 
 function displayNameservers(v, indent) {
     if ("Array" == v.constructor.name && v.length > 0) {
-        printKV("Nameservers", "", indent);
-        v.sort(nameserverSortFunction).forEach(n => displayObject(n, indent+1));
+        v.sort(nameserverSortFunction).forEach(function(n) {
+            printKV("Nameserver", "", indent);
+            displayObject(n, indent+1);
+        });
     }
 }
 
 const nameserverSortFields = ["unicodeName", "ldhName"];
+
 function nameserverSortFunction(a, b) {
     for (var i = 0 ; i < nameserverSortFields.length ; i++) {
         const f = nameserverSortFields[i];
