@@ -8,7 +8,7 @@ dependencies** beyond node.js.
 The easiest way to install `jrdap` is run this command:
 
 ```
-curl https://raw.githubusercontent.com/gbxyz/jrdap/main/install.js | sudo node
+curl -s https://raw.githubusercontent.com/gbxyz/jrdap/main/install.js | sudo node
 ```
 
 Alternatively, just copy [`jrdap`](jrdap) somewhere into your path, or run `make

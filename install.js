@@ -1,5 +1,5 @@
 // jrdap install script
-// usage: curl https://raw.githubusercontent.com/gbxyz/jrdap/main/install.js | sudo node
+// usage: curl -s https://raw.githubusercontent.com/gbxyz/jrdap/main/install.js | sudo node
 
 const fs = require('node:fs');
 
