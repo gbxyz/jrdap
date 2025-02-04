@@ -30,6 +30,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 **/
 
+import fs from "fs";
+
 const NAME          = "jrdap";
 const VERSION       = "0.1";
 const USER_AGENT    = NAME + "/" + VERSION;
@@ -294,6 +296,10 @@ function getBestURL(urls) {
 // get the JSON at a URL, preferring a local copy if available
 //
 async function mirrorJSON(url) {
+    if (!fs.existsSync(CACHE_DIR) && !fs.mkdirSync(CACHE_DIR, {recursive:true, mode:0o700})) {
+        fail("Unable to create cache directory: " + CACHE_DIR);
+    }
+
     const response = await fetch(url);
     return await(response.json());
 }
