@@ -30,11 +30,13 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 **/
 
+const NAME          = "jrdap";
 const VERSION       = "0.1";
-const USER_AGENT    = "jrdap/" + VERSION;
+const USER_AGENT    = NAME + "/" + VERSION;
 const INDENT_STRING = "  ";
 const BOLD          = "\x1b[1m";
 const RESET         = "\x1b[0m";
+const CACHE_DIR     = (process.env.hasOwnProperty("XDG_CACHE_HOME") ? process.env.XDG_CACHE_HOME : process.env.HOME + "/.cache") + "/" + NAME;
 
 //
 // These are used to auto-detect the object type from the provided input.
