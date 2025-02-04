@@ -231,7 +231,7 @@ const url = resolvers[type](object);
 
 const options = {
     headers: {
-        "accept":       "application/json",
+        "accept":       "application/rdap+json, application/json, */*",
         "user-agent":   USER_AGENT,
     },
     redirect: "follow",
