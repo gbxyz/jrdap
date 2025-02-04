@@ -47,6 +47,13 @@ const patterns = [
     [ /^[a-z0-9\.\-]+$/,                            "domain"        ],
 ];
 
+//
+// this stored the locations of the RDAP bootstrap files.
+//
+const bootstrapFiles = {
+    domain: "https://data.iana.org/rdap/dns.json",
+};
+
 const bootstrapServerURL = "https://rdap.org";
 
 //
@@ -54,7 +61,7 @@ const bootstrapServerURL = "https://rdap.org";
 // is used, but eventually these will consume the bootstrap files natively.
 //
 const resolvers = {
-    domain:         o => bootstrapServerURL + "/domain/"    + o,
+    domain:         o => resolveDomain(o),
     "ip network":   o => bootstrapServerURL + "/ip/"        + o,
     autnum:         o => bootstrapServerURL + "/autnum/"    + o.replaceAll(/^ASN?/ig, ""),
     entity:         o => bootstrapServerURL + "/entity/"    + o,
@@ -265,6 +272,56 @@ function doRDAPQuery(url) {
         },
         m => fail(m),
     );
+}
+
+//
+// given an array of URLs, return the "best" one, which is the first that has
+// an https: scheme
+//
+function getBestURL(urls) {
+    const https = urls.filter((u) => u.startsWith("https:"));
+
+    if (https.length > 1) {
+        return https.shift();
+    }
+
+    return urls.shift();
+}
+
+//
+// get the JSON at a URL, preferring a local copy if available
+//
+async function mirrorJSON(url) {
+    const response = await fetch(url);
+    return await(response.json());
+}
+
+//
+// get the registry RDAP URL for a domain
+//
+async function resolveDomain(o) {
+    const registry = await mirrorJSON(bootstrapFiles.domain);
+
+    let matches = {};
+    for (var i = 0 ; i < registry.services.length ; i++) {
+        const tlds = registry.services[i][0];
+        const urls = registry.services[i][1];
+
+        for (var j = 0 ; j < tlds.length ; j++) {
+            if (o.endsWith(tlds[j])) {
+                matches[tlds[j]] = urls;
+                break;
+            }
+        }
+    }
+
+    if (Object.keys(matches).length < 1) {
+        return null;
+    }
+
+    const url = getBestURL(matches[Object.keys(matches).sort((a, b) => b.length - a.length).shift()]);
+
+    return url + "domain/" + o;
 }
 
 function help(msg="", exit=0) {
