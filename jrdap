@@ -262,7 +262,7 @@ function help(msg="", exit=0) {
     say("jrdap is a command-line interface to the Registration Data Access Protocol (RDAP).\n");
     say("Options:\n");
 
-    say("  --help       Display this help");
+    say("  --help       Display this help.");
     say("  --type=TYPE  (OPTIONAL) specify object type.");
     say("  --registrar  Follow referral to registrar's RDAP service (if any).");
     say("  --json       Output raw JSON.");
