@@ -31,6 +31,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 **/
 
 import fs from "fs";
+import crypto from "crypto";
 
 const NAME          = "jrdap";
 const VERSION       = "0.1";
@@ -299,6 +300,8 @@ async function mirrorJSON(url) {
     if (!fs.existsSync(CACHE_DIR) && !fs.mkdirSync(CACHE_DIR, {recursive:true, mode:0o700})) {
         fail("Unable to create cache directory: " + CACHE_DIR);
     }
+
+    const localFile = CACHE_DIR + "/" + crypto.createHash('sha1').update(url).digest('hex') + ".json";
 
     const response = await fetch(url);
     return await(response.json());
