@@ -509,11 +509,12 @@ function displayJCard(v, indent) {
 function displayJCardProperty(p, indent) {
     if ("Array" == p.constructor.name && 4 == p.length) {
         switch(p[0].toUpperCase()) {
-            case "FN":      displayFN(p, indent);       break;
-            case "ORG":     displayORG(p, indent);      break;
-            case "ADR":     displayADR(p, indent);      break;
-            case "TEL":     displayTEL(p, indent);      break;
-            case "EMAIL":   displayEMAIL(p, indent);    break;
+            case "FN":          displayFN(p, indent);           break;
+            case "ORG":         displayORG(p, indent);          break;
+            case "ADR":         displayADR(p, indent);          break;
+            case "TEL":         displayTEL(p, indent);          break;
+            case "EMAIL":       displayEMAIL(p, indent);        break;
+            case "CONTACT-URI": displayContactURI(p, indent);   break;
         }
     }
 }
@@ -571,6 +572,10 @@ function displayIPAddresses(v, indent) {
     });
 
     addrs.forEach(a => printKV("IP Address", a, indent));
+}
+
+function displayContactURI(p, indent) {
+    printKV("Contact URL", p[3], indent);
 }
 
 function displaySecureDNS(v, indent) {
