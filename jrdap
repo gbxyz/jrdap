@@ -167,6 +167,11 @@ const structuredAddressFields = [
 ];
 
 //
+// This is used by nameserverSortFunction() to sort arrays of nameservers.
+//
+const nameserverSortFields = ["unicodeName", "ldhName"];
+
+//
 // Command-line arguments are put in here.
 //
 const opt = {
@@ -519,8 +524,6 @@ function displayNameservers(v, indent) {
         });
     }
 }
-
-const nameserverSortFields = ["unicodeName", "ldhName"];
 
 function nameserverSortFunction(a, b) {
     for (var i = 0 ; i < nameserverSortFields.length ; i++) {
