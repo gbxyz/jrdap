@@ -242,7 +242,15 @@ const fetchOptions = {
     redirect: "follow",
 };
 
-doRDAPQuery(url);
+const url = await resolvers[type](object);
+
+if (!url) {
+    fail("Cannot find an RDAP URL for this resource.");
+
+} else {
+    doRDAPQuery(url);
+
+}
 
 function doRDAPQuery(url) {
     fetch(url, fetchOptions).then(
