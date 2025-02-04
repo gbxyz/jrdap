@@ -507,7 +507,7 @@ function displayJCard(v, indent) {
 }
 
 function displayJCardProperty(p, indent) {
-    if ("Array" == p.constructor.name && 4 == p.length) {
+    if ("Array" == p.constructor.name && p.length >= 4) {
         switch(p[0].toUpperCase()) {
             case "FN":          displayFN(p, indent);           break;
             case "ORG":         displayORG(p, indent);          break;
