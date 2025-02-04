@@ -232,8 +232,6 @@ if (!resolvers.hasOwnProperty(type)) {
     help("Unknown object type '" + type + "'", 1);
 }
 
-const url = resolvers[type](object);
-
 const fetchOptions = {
     headers: {
         "accept":       "application/rdap+json, application/json, */*",
