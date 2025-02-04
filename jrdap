@@ -33,14 +33,14 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 import fs from "fs";
 import crypto from "crypto";
 
-const NAME          = "jrdap";
-const VERSION       = "0.1";
-const USER_AGENT    = NAME + "/" + VERSION;
-const INDENT_STRING = "  ";
-const BOLD          = "\x1b[1m";
-const RESET         = "\x1b[0m";
-const CACHE_DIR     = (process.env.hasOwnProperty("XDG_CACHE_HOME") ? process.env.XDG_CACHE_HOME : process.env.HOME + "/.cache") + "/" + NAME;
-
+const NAME                  = "jrdap";
+const VERSION               = "0.1";
+const USER_AGENT            = NAME + "/" + VERSION;
+const INDENT_STRING         = "  ";
+const BOLD                  = "\x1b[1m";
+const RESET                 = "\x1b[0m";
+const CACHE_DIR             = (process.env.hasOwnProperty("XDG_CACHE_HOME") ? process.env.XDG_CACHE_HOME : process.env.HOME + "/.cache") + "/" + NAME;
+const BOOTSTRAP_FILE_TTL    = 86400 * 1000;
 //
 // These are used to auto-detect the object type from the provided input.
 //
@@ -297,14 +297,40 @@ function getBestURL(urls) {
 // get the JSON at a URL, preferring a local copy if available
 //
 async function mirrorJSON(url) {
+    const now = new Date();
+
     if (!fs.existsSync(CACHE_DIR) && !fs.mkdirSync(CACHE_DIR, {recursive:true, mode:0o700})) {
         fail("Unable to create cache directory: " + CACHE_DIR);
     }
 
     const localFile = CACHE_DIR + "/" + crypto.createHash('sha1').update(url).digest('hex') + ".json";
 
-    const response = await fetch(url);
-    return await(response.json());
+    let headers = {"user-agent": USER_AGENT};
+
+    if (fs.existsSync(localFile)) {
+        const mtime = new Date(fs.statSync(localFile).mtimeMs);
+        if (now - mtime < BOOTSTRAP_FILE_TTL) {
+            return JSON.parse(fs.readFileSync(localFile));
+
+        } else {
+            headers["if-modified-since"] = mtime.toUTCString();
+
+        }
+    }
+
+    const response = await fetch(url, {redirect: "follow", headers: headers});
+
+    if (304 == response.status) {
+        fs.utimesSync(localFile, now, now);
+        return JSON.parse(fs.readFileSync(localFile));
+
+    } else {
+        const json = await(response.json());
+
+        fs.writeFileSync(localFile, JSON.stringify(json));
+
+        return json;
+    }
 }
 
 //
