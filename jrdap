@@ -229,7 +229,7 @@ if (!resolvers.hasOwnProperty(type)) {
 
 const url = resolvers[type](object);
 
-const options = {
+const fetchOptions = {
     headers: {
         "accept":       "application/rdap+json, application/json, */*",
         "user-agent":   USER_AGENT,
@@ -237,20 +237,24 @@ const options = {
     redirect: "follow",
 };
 
-fetch(url, options).then(
-    function(r) {
-        if (!r.ok) {
-            fail(r.statusText + " (" + r.status + ")");
+doRDAPQuery(url);
 
-        } else {
-            r.json().then(
-                j => displayObject(j, 0),
-                m => fail("Error parsing JSON: " + m),
-            );
-        }
-    },
-    m => fail(m),
-);
+function doRDAPQuery(url) {
+    fetch(url, fetchOptions).then(
+        function(r) {
+            if (!r.ok) {
+                fail(r.statusText + " (" + r.status + ")");
+
+            } else {
+                r.json().then(
+                    j => displayObject(j, 0, opt.named.hasOwnProperty("registrar")),
+                    m => fail("Error parsing JSON: " + m),
+                );
+            }
+        },
+        m => fail(m),
+    );
+}
 
 function help(msg="", exit=0) {
     if (msg.length > 0) say("Error: " + msg);
@@ -260,6 +264,7 @@ function help(msg="", exit=0) {
 
     say("  --help       Display this help");
     say("  --type=TYPE  (OPTIONAL) specify object type.");
+    say("  --registrar  Follow referral to registrar's RDAP service (if any).");
     say("  --json       Output raw JSON.");
 
     say("\nTYPE may be one of the following:\n");
@@ -289,7 +294,7 @@ function fail(msg) {
     process.exit(1);
 }
 
-function displayObject(object, indent) {
+function displayObject(object, indent, followReferral=false) {
     if (0 == indent && opt.named.hasOwnProperty("json")) {
         say(JSON.stringify(object, null, "  "));
 
@@ -302,8 +307,37 @@ function displayObject(object, indent) {
             commonFinalProperties,
         ].flat(1);
 
-        displayObjectProperties(object, indent, propertyList);
+        if (!followReferral) {
+            displayObjectProperties(object, indent, propertyList);
+
+        } else {
+            const link = findRegistrarLink(object);
+            if (!link) {
+                displayObjectProperties(object, indent, propertyList);
+
+            } else {
+                doRDAPQuery(link.href);
+
+            }
+        }
     }
+}
+
+function findRegistrarLink(object) {
+    if (object.hasOwnProperty("links") && "Array" == object.links.constructor.name) {
+        for (var i = 0 ; i < object.links.length ; i++) {
+            const link = object.links[i];
+
+            if (
+                (link.hasOwnProperty("rel") && "related" == link.rel) &&
+                (link.hasOwnProperty("type") && link.type.startsWith("application/rdap+json"))
+            ) {
+                return link;
+            }
+        }
+    }
+
+    return null;
 }
 
 function displayObjectProperties(object, indent, propertyList) {
