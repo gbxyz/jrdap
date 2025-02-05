@@ -58,6 +58,7 @@ const patterns = [
 const bootstrapFiles = {
     domain: "https://data.iana.org/rdap/dns.json",
     entity: "https://data.iana.org/rdap/object-tags.json",
+    autnum: "https://data.iana.org/rdap/asn.json",
 };
 
 const bootstrapServerURL = "https://rdap.org";
@@ -69,10 +70,10 @@ const bootstrapServerURL = "https://rdap.org";
 const resolvers = {
     domain:         o => resolveDomain(o),
     nameserver:     o => resolveNameserver(o),
-    "ip network":   o => bootstrapServerURL + "/ip/"        + o,
-    autnum:         o => bootstrapServerURL + "/autnum/"    + o.replaceAll(/^ASN?/ig, ""),
+    "ip network":   o => bootstrapServerURL + "/ip/" + o,
+    autnum:         o => resolveAutnum(o),
     entity:         o => resolveEntity(o),
-    tld:            o => "https://rdap.iana.org/domain/"    + o,
+    tld:            o => "https://rdap.iana.org/domain/" + o,
     url:            o => o,
 };
 
@@ -411,6 +412,35 @@ async function resolveNameserver(o) {
 
     url.pathname = segments.join("/");
     return url.toString();
+}
+
+async function resolveAutnum(o) {
+    const autnum = parseInt(o.replace(/^asn?/i, ""));
+
+    const registry = await mirrorJSON(bootstrapFiles.autnum);
+
+    let matches = {};
+    for (var i = 0 ; i < registry.services.length ; i++) {
+        const ranges = registry.services[i][0];
+        const urls = registry.services[i][1];
+
+        for (var j = 0 ; j < ranges.length ; j++) {
+            const range = ranges[j].split("-").map(n => parseInt(n));
+
+            if (autnum >= range[0] && autnum <= range[1]) {
+                matches[range[1] - range[0]] = urls;
+                break;
+            }
+        }
+    }
+
+    if (Object.keys(matches).length < 1) {
+        return null;
+    }
+
+    const url = getBestURL(matches[Object.keys(matches).sort((a, b) => parseInt(b) - parseInt(a)).shift()]);
+
+    return url + "autnum/" + autnum;
 }
 
 function help(msg="", exit=0) {
