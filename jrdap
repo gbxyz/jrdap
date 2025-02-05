@@ -59,6 +59,8 @@ const bootstrapFiles = {
     domain: "https://data.iana.org/rdap/dns.json",
     entity: "https://data.iana.org/rdap/object-tags.json",
     autnum: "https://data.iana.org/rdap/asn.json",
+    ipv4:   "https://data.iana.org/rdap/ipv4.json",
+    ipv6:   "https://data.iana.org/rdap/ipv6.json",
 };
 
 const bootstrapServerURL = "https://rdap.org";
