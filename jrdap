@@ -41,6 +41,7 @@ const BOLD                  = "\x1b[1m";
 const RESET                 = "\x1b[0m";
 const CACHE_DIR             = (process.env.hasOwnProperty("XDG_CACHE_HOME") ? process.env.XDG_CACHE_HOME : process.env.HOME + "/.cache") + "/" + NAME;
 const BOOTSTRAP_FILE_TTL    = 86400 * 1000;
+
 //
 // These are used to auto-detect the object type from the provided input.
 //
