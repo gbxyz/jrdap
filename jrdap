@@ -232,15 +232,25 @@ if (opt.named.hasOwnProperty("type")) {
     type = opt.named.type;
 
 } else {
-    for (var i = 0 ; i < patterns.length ; i++) {
-        if (patterns[i][0].test(object)) {
-            type = patterns[i][1];
+    const types = Object.keys(resolvers);
+    for (var i = 0 ; i < types.length ; i++) {
+        if (opt.named.hasOwnProperty(types[i])) {
+            type = types[i];
             break;
+        }
+    }
+
+    if (!type) {
+        for (var i = 0 ; i < patterns.length ; i++) {
+            if (patterns[i][0].test(object)) {
+                type = patterns[i][1];
+                break;
+            }
         }
     }
 }
 
-type = type.replaceAll("-", " ");
+type = (type ?? "").replaceAll("-", " ");
 
 if (!resolvers.hasOwnProperty(type)) {
     help("Unknown object type '" + type + "'", 1);
@@ -411,6 +421,7 @@ function help(msg="", exit=0) {
 
     say("  --help       Display this help.");
     say("  --type=TYPE  (OPTIONAL) specify object type.");
+    say("  --TYPE       Alias for --type=TYPE.");
     say("  --registrar  Follow referral to registrar's RDAP service (if any).");
     say("  --json       Output raw JSON.");
 
@@ -423,7 +434,7 @@ function help(msg="", exit=0) {
         "192.0.2.1",
         "2001:DB8::1",
         "AS1701",
-        "--type=tld org",
+        "--tld org",
         "https://rdap.org/domain/rdap.org",
     ];
 
