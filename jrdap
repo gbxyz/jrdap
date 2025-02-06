@@ -43,6 +43,13 @@ const CACHE_DIR             = (process.env.hasOwnProperty("XDG_CACHE_HOME") ? pr
 const BOOTSTRAP_FILE_TTL    = 86400 * 1000;
 
 //
+// these two constants are equal to the bit-length of IP addresses in the
+// respective address families and must not be changed.
+//
+const AF_INET   = 32;
+const AF_INET6  = 128;
+
+//
 // These are used to auto-detect the object type from the provided input.
 //
 const patterns = [
