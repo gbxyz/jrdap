@@ -469,7 +469,31 @@ async function resolveAutnum(o) {
 }
 
 async function resolveIP(o) {
-    return "https://rdap.org/ip/" + o;
+
+    const ip = parseIP(o);
+    if (!ip) return null;
+
+    const registry = await mirrorJSON(bootstrapFiles[AF_INET6 == ip.family ? "ipv6" : "ipv4"]);
+
+    let matches = [];
+    for (var i = 0 ; i < registry.services.length ; i++) {
+        const ranges = registry.services[i][0];
+        const urls = registry.services[i][1];
+
+        for (var j = 0 ; j < ranges.length ; j++) {
+            const cidr = parseCIDR(ranges[j]);
+
+            if (cidr.family == ip.family && cidr.min <= ip.addr && ip.addr <= cidr.max) {
+                matches.push([cidr.plen, urls]);
+            }
+        }
+    }
+
+    if (matches.length < 1) {
+        return null;
+    }
+
+    return getBestURL(matches.sort((a, b) => b[0] - a[0]).shift()[1]) + "ip/" + o;
 }
 
 function help(msg="", exit=0) {
