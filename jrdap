@@ -945,3 +945,116 @@ function say(l) {
 function ucFirst(str) {
     return str.charAt(0).toUpperCase() + str.slice(1);
 }
+
+//
+// parse a string containing an IPv4/6 address into an object with the following
+// properties:
+// * `family` - either AF_INET or AF_INET6
+// * `addr` - IP address as a BigInt
+//
+function parseIP(ip) {
+    if (ip.includes(":")) {
+        let addr = parseIPv6(ip);
+        if (!addr) return null;
+
+        return {
+            family: AF_INET6,
+            addr:   addr,
+        };
+
+    } else {
+        let addr = parseIPv4(ip);
+        if (!addr) return null;
+
+        return {
+            family: AF_INET,
+            addr:   addr,
+        };
+
+    }
+}
+
+//
+// parse a string containing an IPv4 address into an object with the following
+// properties:
+// * `family` - equal to AF_INET
+// * `addr` - IP address as a BigInt
+//
+function parseIPv4(ip) {
+    // convert IP to an array of BigInts between 0 and 255
+    const octets = ip.split(".")
+                    .filter(o => o >= 0 && o <= 255)
+                    .map(o => BigInt(o));
+
+    if (4 != octets.length) return null;
+
+    let addr = 0n;
+
+    while (octets.length > 0) {
+        addr += octets.pop() << (8n * (3n - BigInt(octets.length)));
+    }
+
+    return addr;
+}
+
+//
+// parse a string containing an IPv4 address into an object with the following
+// properties:
+// * `family` - equal to AF_INET
+// * `addr` - IP address as a BigInt
+//
+function parseIPv6(ip) {
+
+    // address can't have more than one occurrence of ::
+    if (Array.from(ip.matchAll(/::/g)).length > 1) return null;
+
+    // split into segments and parse hex into BigInts between 0 and 65535, with
+    // null acting as the placeholder for ::
+    const segments = ip.split(":")
+                        .map(h => 0 == h.length ? null : BigInt(parseInt(h, 16)))
+                        .filter(n => null == n || n >= 0n & n <= 65535n);
+
+    // replace null with the appropiate number of 0n segments
+    for (var i = 0 ; i < segments.length ; i++) {
+        if (null == segments[i]) {
+            segments.splice(i, 1, ...Array(9-segments.length).fill(0n));
+        }
+    }
+
+    if (8 != segments.length) return null;
+
+    let addr = 0n;
+
+    while (segments.length > 0) {
+        addr += segments.pop() << (16n * (7n - BigInt(segments.length)));
+    }
+
+    return addr;
+}
+
+//
+// parse a string containing an IPv4/6 CIDR prefix into an object with the
+// following properties:
+// * `family` - either AF_INET or AF_INET6
+// * `plen` - the prefix length as an integer
+// * `min` - the lowest address in the prefix
+// * `max` - the highest address in the prefix
+//
+function parseCIDR(cidr) {
+    const parts = cidr.split("/");
+    const ip    = parseIP(parts[0]);
+    const plen  = parseInt(parts[1]);
+
+    let max = ip.addr;
+
+    for (var k = 0 ; k < ip.family - plen ; k++) {
+        max |= BigInt(Math.pow(2, k));
+    }
+
+    return {
+        family: ip.family,
+        plen:   plen,
+        min:    ip.addr,
+        max:    max,
+    };
+}
