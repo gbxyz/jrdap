@@ -483,7 +483,7 @@ async function resolveIP(o) {
         for (var j = 0 ; j < ranges.length ; j++) {
             const cidr = parseCIDR(ranges[j]);
 
-            if (cidr.family == ip.family && cidr.min <= ip.addr && ip.addr <= cidr.max) {
+            if (cidr && cidr.family == ip.family && cidr.min <= ip.addr && ip.addr <= cidr.max) {
                 matches.push([cidr.plen, urls]);
             }
         }
@@ -971,10 +971,11 @@ function ucFirst(str) {
 }
 
 //
-// parse a string containing an IPv4/6 address into an object with the following
+// Parse a string containing an IPv4/6 address into an object with the following
 // properties:
 // * `family` - either AF_INET or AF_INET6
 // * `addr` - IP address as a BigInt
+// Returns `null` if the address is invalid.
 //
 function parseIP(ip) {
     if (ip.includes(":")) {
@@ -999,10 +1000,11 @@ function parseIP(ip) {
 }
 
 //
-// parse a string containing an IPv4 address into an object with the following
+// Parse a string containing an IPv4 address into an object with the following
 // properties:
 // * `family` - equal to AF_INET
 // * `addr` - IP address as a BigInt
+// Returns `null` if the address is invalid.
 //
 function parseIPv4(ip) {
     // convert IP to an array of BigInts between 0 and 255
@@ -1022,10 +1024,11 @@ function parseIPv4(ip) {
 }
 
 //
-// parse a string containing an IPv4 address into an object with the following
+// Parse a string containing an IPv4 address into an object with the following
 // properties:
 // * `family` - equal to AF_INET
 // * `addr` - IP address as a BigInt
+// Returns `null` if the address is invalid.
 //
 function parseIPv6(ip) {
 
@@ -1057,12 +1060,13 @@ function parseIPv6(ip) {
 }
 
 //
-// parse a string containing an IPv4/6 CIDR prefix into an object with the
+// Parse a string containing an IPv4/6 CIDR prefix into an object with the
 // following properties:
 // * `family` - either AF_INET or AF_INET6
 // * `plen` - the prefix length as an integer
 // * `min` - the lowest address in the prefix
 // * `max` - the highest address in the prefix
+// Returns `null` if the prefix is invalid.
 //
 function parseCIDR(cidr) {
     const parts = cidr.split("/");
