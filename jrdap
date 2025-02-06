@@ -34,8 +34,8 @@ import fs from "fs";
 import crypto from "crypto";
 
 const NAME                  = "jrdap";
-const VERSION               = "0.1";
-const USER_AGENT            = NAME + "/" + VERSION;
+const VERSION               = "0.2";
+const USER_AGENT            = `${NAME}/${VERSION} (node.js ${process.version}, ${process.platform}, ${process.arch})`;
 const INDENT_STRING         = "  ";
 const BOLD                  = "\x1b[1m";
 const RESET                 = "\x1b[0m";
