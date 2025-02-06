@@ -195,6 +195,17 @@ const structuredAddressFields = [
 const nameserverSortFields = ["unicodeName", "ldhName"];
 
 //
+// default options passed to fetch().
+//
+const fetchOptions = {
+    headers: {
+        "accept":       "application/rdap+json, application/json, */*",
+        "user-agent":   USER_AGENT,
+    },
+    redirect: "follow",
+};
+
+//
 // Command-line arguments are put in here.
 //
 const opt = {
@@ -265,14 +276,9 @@ if (!resolvers.hasOwnProperty(type)) {
     help("Unknown object type '" + type + "'", 1);
 }
 
-const fetchOptions = {
-    headers: {
-        "accept":       "application/rdap+json, application/json, */*",
-        "user-agent":   USER_AGENT,
-    },
-    redirect: "follow",
-};
-
+//
+// resolve the requested object to a URL.
+//
 const url = await resolvers[type](object);
 
 if (!url) {
