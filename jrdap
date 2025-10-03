@@ -678,7 +678,7 @@ function lowestRole(e) {
         return undefined;
 
     } else {
-        return e.roles.sort(sortRoles).shift();
+        return e.roles.sort(sortRoles)[0];
 
     }
 }
